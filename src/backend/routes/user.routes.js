@@ -1,6 +1,6 @@
 const express = require('express');
 const { authenticateToken } = require('../lib/auth');
-const { readData, writeData } = require('../lib/store');
+const { DEFAULT_SERVER_ID, readData, writeData } = require('../lib/store');
 
 const router = express.Router();
 
@@ -55,7 +55,19 @@ router.get('/:userId/channels', authenticateToken, (req, res) => {
     return res.status(404).json({ error: 'User not found' });
   }
 
-  return res.json(user.channels || []);
+  const channels = db.channels.filter((channel) => (user.channels || []).includes(channel.id));
+  return res.json(channels);
+});
+
+router.get('/:userId/servers', authenticateToken, (req, res) => {
+  const db = readData();
+  const user = db.users.find((entry) => entry.id === req.params.userId);
+  if (!user) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  const servers = db.servers.filter((server) => (user.serverIds || [DEFAULT_SERVER_ID]).includes(server.id));
+  return res.json(servers);
 });
 
 module.exports = router;

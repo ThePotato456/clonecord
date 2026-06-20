@@ -11,6 +11,7 @@ const { readData, writeData } = require('./lib/store');
 
 const authRoutes = require('./routes/auth.routes');
 const userRoutes = require('./routes/user.routes');
+const serverRoutes = require('./routes/server.routes');
 const channelRoutes = require('./routes/channel.routes');
 const messageRoutes = require('./routes/message.routes');
 
@@ -35,9 +36,14 @@ app.use(
     max: 300,
   })
 );
+app.use((req, _res, next) => {
+  req.io = io;
+  next();
+});
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/servers', serverRoutes);
 app.use('/api/channels', channelRoutes);
 app.use('/api/messages', messageRoutes);
 
@@ -68,42 +74,42 @@ io.on('connection', (socket) => {
     user.status = 'online';
     user.lastSeenAt = new Date().toISOString();
     writeData(db);
+
+    socket.join(`user:${user.id}`);
+    (user.serverIds || []).forEach((serverId) => socket.join(`server:${serverId}`));
   }
 
-  socket.on('channel:join', ({ channelId }) => {
-    if (!channelId) return;
-    socket.join(channelId);
+  socket.on('server:join', ({ serverId }) => {
+    if (!serverId) return;
+    socket.join(`server:${serverId}`);
   });
 
-  socket.on('channel:leave', ({ channelId }) => {
-    if (!channelId) return;
-    socket.leave(channelId);
+  socket.on('server:leave', ({ serverId }) => {
+    if (!serverId) return;
+    socket.leave(`server:${serverId}`);
   });
 
-  socket.on('message:create', ({ channelId, content }) => {
-    if (!channelId || !content) return;
-    io.to(channelId).emit('message:created', {
-      id: `socket-${Date.now()}`,
-      channelId,
-      userId: socket.userId,
-      username: socket.username,
-      content,
-      timestamp: new Date().toISOString(),
-      editedAt: null,
-    });
+  socket.on('channel:join', ({ serverId, channelId }) => {
+    if (!serverId || !channelId) return;
+    socket.join(`channel:${serverId}:${channelId}`);
   });
 
-  socket.on('typing:start', ({ channelId }) => {
-    if (!channelId) return;
-    socket.to(channelId).emit('typing:user_typing', {
+  socket.on('channel:leave', ({ serverId, channelId }) => {
+    if (!serverId || !channelId) return;
+    socket.leave(`channel:${serverId}:${channelId}`);
+  });
+
+  socket.on('typing:start', ({ serverId, channelId }) => {
+    if (!serverId || !channelId) return;
+    socket.to(`channel:${serverId}:${channelId}`).emit('typing:user_typing', {
       userId: socket.userId,
       username: socket.username,
     });
   });
 
-  socket.on('typing:end', ({ channelId }) => {
-    if (!channelId) return;
-    socket.to(channelId).emit('typing:user_stopped', {
+  socket.on('typing:end', ({ serverId, channelId }) => {
+    if (!serverId || !channelId) return;
+    socket.to(`channel:${serverId}:${channelId}`).emit('typing:user_stopped', {
       userId: socket.userId,
       username: socket.username,
     });

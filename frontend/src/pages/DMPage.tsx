@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { connectSocket } from '../lib/socket';
 
 interface User {
   id: string;
@@ -27,6 +28,23 @@ function DMPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, selectedUser]);
+
+  useEffect(() => {
+    const token = localStorage.getItem('auth_token');
+    if (!token) return;
+
+    const socket = connectSocket(token);
+    const onDmMessage = (message: DirectMessage & { recipientId?: string }) => {
+      if (selectedUser && (message.userId === selectedUser.id || message.recipientId === selectedUser.id)) {
+        setMessages((current) => (current.some((entry) => entry.id === message.id) ? current : [...current, message]));
+      }
+    };
+
+    socket.on('dm:message', onDmMessage);
+    return () => {
+      socket.off('dm:message', onDmMessage);
+    };
+  }, [selectedUser]);
 
   useEffect(() => {
     const token = localStorage.getItem('auth_token');
@@ -84,25 +102,21 @@ function DMPage() {
       const token = localStorage.getItem('auth_token');
       if (!token) return;
 
-      await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:4000'}/api/messages`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:4000'}/api/messages`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ channelId: selectedUser.id, content: newMessage.trim() }),
+        body: JSON.stringify({ recipientId: selectedUser.id, content: newMessage.trim() }),
       });
 
-      setMessages((current) => [
-        ...current,
-        {
-          id: crypto.randomUUID(),
-          userId: localStorage.getItem('user_id') || 'me',
-          username: 'You',
-          content: newMessage.trim(),
-          timestamp: new Date().toISOString(),
-        },
-      ]);
+      const created = await response.json();
+      if (!response.ok) {
+        throw new Error(created.error || 'Failed to send DM');
+      }
+
+      setMessages((current) => (current.some((entry) => entry.id === created.id) ? current : [...current, created]));
       setNewMessage('');
     } catch (error) {
       console.error('Failed to send direct message:', error);

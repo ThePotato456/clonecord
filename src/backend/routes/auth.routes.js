@@ -1,7 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const { signToken, authenticateToken } = require('../lib/auth');
-const { readData, writeData, randomUUID } = require('../lib/store');
+const { DEFAULT_CHANNEL_ID, DEFAULT_SERVER_ID, randomUUID, readData, writeData } = require('../lib/store');
 
 const router = express.Router();
 
@@ -37,21 +37,29 @@ router.post('/register', async (req, res) => {
       passwordHash,
       avatarUrl: null,
       status: 'online',
-      clientFingerprint,
+      clientFingerprints: clientFingerprint ? [clientFingerprint] : [],
       createdAt: new Date().toISOString(),
       lastSeenAt: new Date().toISOString(),
-      channels: ['general'],
+      serverIds: [DEFAULT_SERVER_ID],
+      channels: [DEFAULT_CHANNEL_ID],
     };
 
     db.users.push(user);
-    const generalChannel = db.channels.find((channel) => channel.id === 'general');
-    if (generalChannel && !generalChannel.memberIds.includes(user.id)) {
-      generalChannel.memberIds.push(user.id);
+
+    const defaultServer = db.servers.find((server) => server.id === DEFAULT_SERVER_ID);
+    if (defaultServer && !defaultServer.memberIds.includes(user.id)) {
+      defaultServer.memberIds.push(user.id);
     }
+
+    const defaultChannel = db.channels.find((channel) => channel.id === DEFAULT_CHANNEL_ID);
+    if (defaultChannel && !defaultChannel.memberIds.includes(user.id)) {
+      defaultChannel.memberIds.push(user.id);
+    }
+
     writeData(db);
 
     const token = signToken(user);
-    const { passwordHash: _, ...safeUser } = user;
+    const { passwordHash: _passwordHash, ...safeUser } = user;
     return res.status(201).json({ user: safeUser, token, message: 'User registered successfully' });
   } catch (error) {
     console.error('Registration error:', error);
@@ -61,7 +69,7 @@ router.post('/register', async (req, res) => {
 
 router.post('/login', async (req, res) => {
   try {
-    const { username, email, password } = req.body;
+    const { username, email, password, clientFingerprint = null } = req.body;
     const login = String(username || email || '').trim();
 
     if (!login || !password) {
@@ -84,10 +92,16 @@ router.post('/login', async (req, res) => {
 
     user.status = 'online';
     user.lastSeenAt = new Date().toISOString();
+    user.serverIds = Array.isArray(user.serverIds) ? user.serverIds : [DEFAULT_SERVER_ID];
+    user.channels = Array.isArray(user.channels) ? user.channels : [DEFAULT_CHANNEL_ID];
+    user.clientFingerprints = Array.isArray(user.clientFingerprints) ? user.clientFingerprints : [];
+    if (clientFingerprint && !user.clientFingerprints.includes(clientFingerprint)) {
+      user.clientFingerprints.push(clientFingerprint);
+    }
     writeData(db);
 
     const token = signToken(user);
-    const { passwordHash: _, ...safeUser } = user;
+    const { passwordHash: _passwordHash, ...safeUser } = user;
     return res.json({ user: safeUser, token, message: 'Login successful' });
   } catch (error) {
     console.error('Login error:', error);

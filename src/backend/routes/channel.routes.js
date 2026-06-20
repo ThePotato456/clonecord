@@ -6,23 +6,39 @@ const router = express.Router();
 
 router.get('/', authenticateToken, (req, res) => {
   const db = readData();
-  return res.json(db.channels);
+  const { serverId } = req.query;
+  const channels = db.channels.filter((channel) => {
+    if (serverId && channel.serverId !== serverId) {
+      return false;
+    }
+    return (channel.memberIds || []).includes(req.user.userId) || channel.ownerId === req.user.userId;
+  });
+  return res.json(channels);
 });
 
 router.post('/', authenticateToken, (req, res) => {
-  const { name, type = 'text', topic = '' } = req.body;
+  const { name, type = 'text', topic = '', serverId } = req.body;
+  if (!serverId) {
+    return res.status(400).json({ error: 'serverId is required' });
+  }
   if (!name || String(name).trim().length < 2) {
     return res.status(400).json({ error: 'Channel name must be at least 2 characters' });
   }
 
   const db = readData();
+  const server = db.servers.find((entry) => entry.id === serverId && (entry.memberIds || []).includes(req.user.userId));
+  if (!server) {
+    return res.status(404).json({ error: 'Server not found' });
+  }
+
   const id = slugifyChannelName(name);
-  if (db.channels.some((channel) => channel.id === id || channel.name.toLowerCase() === String(name).trim().toLowerCase())) {
+  if (db.channels.some((channel) => channel.serverId === server.id && channel.id === id)) {
     return res.status(409).json({ error: 'Channel already exists' });
   }
 
   const channel = {
     id,
+    serverId: server.id,
     name: String(name).trim(),
     type,
     topic,
@@ -38,6 +54,10 @@ router.post('/', authenticateToken, (req, res) => {
   }
   writeData(db);
 
+  if (req.io) {
+    req.io.to(`server:${server.id}`).emit('channel:created', channel);
+  }
+
   return res.status(201).json(channel);
 });
 
@@ -45,6 +65,11 @@ router.get('/:channelId', authenticateToken, (req, res) => {
   const db = readData();
   const channel = db.channels.find((entry) => entry.id === req.params.channelId);
   if (!channel) {
+    return res.status(404).json({ error: 'Channel not found' });
+  }
+
+  const server = db.servers.find((entry) => entry.id === channel.serverId);
+  if (!server || !(server.memberIds || []).includes(req.user.userId)) {
     return res.status(404).json({ error: 'Channel not found' });
   }
 
@@ -75,8 +100,13 @@ router.delete('/:channelId', authenticateToken, (req, res) => {
   }
 
   const channel = db.channels[index];
-  if (channel.id === 'general') {
-    return res.status(400).json({ error: 'General channel cannot be deleted' });
+  const server = db.servers.find((entry) => entry.id === channel.serverId);
+  if (!server) {
+    return res.status(404).json({ error: 'Server not found' });
+  }
+
+  if (channel.id === server.defaultChannelId) {
+    return res.status(400).json({ error: 'Default channel cannot be deleted' });
   }
 
   if (channel.ownerId !== req.user.userId) {

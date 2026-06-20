@@ -1,16 +1,17 @@
 import React from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
+import AppLayout from './components/AppLayout';
 import AuthPage from './pages/AuthPage';
 import ChannelPage from './pages/ChannelPage';
 import DMPage from './pages/DMPage';
-import AppLayout from './components/AppLayout';
+import RootRedirect from './pages/RootRedirect';
 
 function App() {
   return (
     <Routes>
       <Route path="/auth" element={<AuthPage />} />
       <Route
-        path="/channel/:id"
+        path="/server/:serverId/channel/:channelId"
         element={
           <AppLayout>
             <ChannelPage />
@@ -25,7 +26,8 @@ function App() {
           </AppLayout>
         }
       />
-      <Route path="/" element={<Navigate to="/channel/general" replace />} />
+      <Route path="/" element={<RootRedirect />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

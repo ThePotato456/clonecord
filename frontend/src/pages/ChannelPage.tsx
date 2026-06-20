@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import io, { Socket } from 'socket.io-client';
+import { connectSocket } from '../lib/socket';
 
 interface Message {
   id: string;
+  kind?: string;
+  serverId?: string;
   channelId: string;
   userId: string;
   username: string;
@@ -18,14 +20,15 @@ interface ChannelData {
   topic?: string;
 }
 
-const socket: Socket = io(process.env.REACT_APP_API_URL || 'http://localhost:4000', {
-  autoConnect: false,
-  auth: { token: localStorage.getItem('auth_token') },
-});
+function appendUnique(messages: Message[], incoming: Message) {
+  if (messages.some((message) => message.id === incoming.id)) {
+    return messages;
+  }
+  return [...messages, incoming];
+}
 
 function ChannelPage() {
-  const { id } = useParams<{ id: string }>();
-  const channelId = id ?? 'general';
+  const { serverId = 'hermes-hub', channelId = 'general' } = useParams<{ serverId: string; channelId: string }>();
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
@@ -40,16 +43,13 @@ function ChannelPage() {
     const token = localStorage.getItem('auth_token');
     if (!token) return;
 
-    socket.auth = { token };
-    if (!socket.connected) {
-      socket.connect();
-    }
-
-    socket.emit('channel:join', { channelId });
+    const socket = connectSocket(token);
+    socket.emit('server:join', { serverId });
+    socket.emit('channel:join', { serverId, channelId });
 
     const onMessageCreated = (message: Message) => {
-      if (message.channelId === channelId) {
-        setMessages((current) => [...current, message]);
+      if (message.channelId === channelId && message.serverId === serverId) {
+        setMessages((current) => appendUnique(current, message));
       }
     };
 
@@ -57,8 +57,8 @@ function ChannelPage() {
       setTypingUsers((current) => (current.includes(username) ? current : [...current, username]));
     };
 
-    const onStoppedTyping = ({ userId }: { userId: string }) => {
-      setTypingUsers((current) => current.filter((name) => name !== userId));
+    const onStoppedTyping = ({ username }: { username: string }) => {
+      setTypingUsers((current) => current.filter((name) => name !== username));
     };
 
     socket.on('message:created', onMessageCreated);
@@ -66,12 +66,12 @@ function ChannelPage() {
     socket.on('typing:user_stopped', onStoppedTyping);
 
     return () => {
-      socket.emit('channel:leave', { channelId });
+      socket.emit('channel:leave', { serverId, channelId });
       socket.off('message:created', onMessageCreated);
       socket.off('typing:user_typing', onTyping);
       socket.off('typing:user_stopped', onStoppedTyping);
     };
-  }, [channelId]);
+  }, [channelId, serverId]);
 
   useEffect(() => {
     const token = localStorage.getItem('auth_token');
@@ -80,12 +80,13 @@ function ChannelPage() {
     const loadChannel = async () => {
       try {
         const [channelRes, messagesRes] = await Promise.all([
-          fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:4000'}/api/channels/${channelId}`, {
+          fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:4000'}/api/servers/${serverId}/channels/${channelId}`, {
             headers: { Authorization: `Bearer ${token}` },
           }),
-          fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:4000'}/api/messages/channel/${channelId}?limit=50`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
+          fetch(
+            `${process.env.REACT_APP_API_URL || 'http://localhost:4000'}/api/messages/channel/${channelId}?serverId=${serverId}&limit=50`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          ),
         ]);
 
         const channelJson = await channelRes.json();
@@ -110,7 +111,7 @@ function ChannelPage() {
     };
 
     void loadChannel();
-  }, [channelId]);
+  }, [channelId, serverId]);
 
   const handleSendMessage = async () => {
     if (!newMessage.trim()) return;
@@ -118,8 +119,9 @@ function ChannelPage() {
     try {
       const token = localStorage.getItem('auth_token');
       if (!token) return;
+      const socket = connectSocket(token);
 
-      socket.emit('typing:start', { channelId });
+      socket.emit('typing:start', { serverId, channelId });
 
       const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:4000'}/api/messages`, {
         method: 'POST',
@@ -127,7 +129,7 @@ function ChannelPage() {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ channelId, content: newMessage.trim() }),
+        body: JSON.stringify({ serverId, channelId, content: newMessage.trim() }),
       });
 
       if (!response.ok) {
@@ -135,8 +137,8 @@ function ChannelPage() {
       }
 
       const created = (await response.json()) as Message;
-      setMessages((current) => [...current, created]);
-      socket.emit('typing:end', { channelId });
+      setMessages((current) => appendUnique(current, created));
+      socket.emit('typing:end', { serverId, channelId });
       setNewMessage('');
     } catch (error) {
       console.error('Failed to send message:', error);

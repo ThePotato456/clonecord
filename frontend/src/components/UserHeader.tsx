@@ -1,27 +1,35 @@
 import React, { useState } from 'react';
 
 interface UserHeaderProps {
-  user: any;
+  user: {
+    id: string;
+    username: string;
+    status?: string;
+  };
 }
 
 const statusOptions = [
-  { value: 'online', label: 'Online', color: '#3ba55c' },
-  { value: 'idle', label: 'Idle', color: '#faa61a' },
-  { value: 'dnd', label: 'Do Not Disturb', color: '#da373c' },
-  { value: 'offline', label: 'Offline', color: '#72767d' },
+  { value: 'online', label: 'Online' },
+  { value: 'idle', label: 'Idle' },
+  { value: 'dnd', label: 'Do Not Disturb' },
+  { value: 'offline', label: 'Offline' },
 ];
 
 function UserHeader({ user }: UserHeaderProps) {
   const [status, setStatus] = useState(user.status || 'online');
   const [isEditing, setIsEditing] = useState(false);
 
-  const handleStatusChange = async () => {
+  const handleStatusChange = async (nextStatus: string) => {
     try {
       await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:4000'}/api/users/${user.id}/status`, {
         method: 'PATCH',
-        headers: { Authorization: `Bearer ${localStorage.getItem('auth_token')}` },
-        body: JSON.stringify({ status }),
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status: nextStatus }),
       });
+      setStatus(nextStatus);
     } catch (error) {
       console.error('Failed to update status:', error);
     }
@@ -29,54 +37,42 @@ function UserHeader({ user }: UserHeaderProps) {
   };
 
   return (
-    <div className="flex flex-col items-center py-4">
-      {/* Avatar */}
-      <div className="relative group cursor-pointer">
-        <div 
-          className={`w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white font-bold text-lg border-2 ${
-            status === 'online' ? 'border-green-500' : 
-            status === 'idle' ? 'border-yellow-500' : 
-            status === 'dnd' ? 'border-red-500' : 'border-gray-500'
-          }`}
-        >
-          {user.username?.charAt(0).toUpperCase() || '?'}
-        </div>
-        <span className={`absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full border-2 border-discord-sidebar ${
-          status === 'online' ? 'bg-green-500' : 
-          status === 'idle' ? 'bg-yellow-500' : 
-          status === 'dnd' ? 'bg-red-500' : 'bg-gray-500'
-        }`} />
+    <div className="flex items-center gap-3 px-4 py-3">
+      <div
+        className={`flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-purple-500 to-blue-500 font-bold text-white ring-2 ${
+          status === 'online'
+            ? 'ring-green-500'
+            : status === 'idle'
+            ? 'ring-yellow-500'
+            : status === 'dnd'
+            ? 'ring-red-500'
+            : 'ring-gray-500'
+        }`}
+      >
+        {user.username?.charAt(0).toUpperCase() || '?'}
       </div>
 
-      {/* Username and Status */}
-      <div className="mt-2 text-center">
-        <p className="font-medium text-discord-text truncate max-w-[120px]">{user.username}</p>
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-medium text-discord-text">{user.username}</p>
         {isEditing ? (
-          <select 
-            value={status} 
-            onChange={(e) => setStatus(e.target.value)}
-            onBlur={handleStatusChange}
+          <select
+            value={status}
+            onChange={(e) => void handleStatusChange(e.target.value)}
             autoFocus
-            className="mt-1 px-2 py-1 text-sm bg-discord-bg rounded border border-gray-600 focus:border-discord-accent outline-none"
+            className="mt-1 w-full rounded border border-gray-600 bg-discord-bg px-2 py-1 text-sm outline-none focus:border-discord-accent"
           >
-            {statusOptions.map(opt => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            {statusOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
             ))}
           </select>
         ) : (
-          <p className="text-xs text-discord-muted capitalize">{user.status || 'online'}</p>
+          <button type="button" onClick={() => setIsEditing(true)} className="text-xs capitalize text-discord-muted hover:text-white">
+            {status}
+          </button>
         )}
       </div>
-
-      {/* Edit Status Button */}
-      {!isEditing && (
-        <button 
-          onClick={() => setIsEditing(true)}
-          className="mt-2 px-3 py-1 text-xs bg-discord-accent hover:bg-purple-600 rounded-full transition-colors"
-        >
-          Change Status
-        </button>
-      )}
     </div>
   );
 }
