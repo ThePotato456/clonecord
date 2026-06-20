@@ -1,0 +1,32 @@
+{
+  "name": "discord-chat-app",
+  "version": "1.0.0",
+  "description": "A fully-featured Discord-like chat application",
+  "main": "index.js",
+  "scripts": {
+    "start:backend": "cd src/backend && node server.js",
+    "dev:frontend": "cd frontend && npm start",
+    "build:frontend": "cd frontend && npm run build",
+    "start": "concurrently \"npm run start:backend\" \"npm run dev:frontend\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.5.2",
+    "helmet": "^8.2.0",
+    "ioredis": "^5.11.1",
+    "jsonwebtoken": "^9.0.3",
+    "morgan": "^1.11.0",
+    "redis": "^6.0.0",
+    "socket.io": "^4.8.3",
+    "uuid": "^14.0.1"
+  }
+}
