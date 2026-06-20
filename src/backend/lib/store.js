@@ -2,10 +2,17 @@ const fs = require('fs');
 const path = require('path');
 const { randomUUID } = require('crypto');
 
-const dataDir = path.join(__dirname, '..', 'data');
-const dataFile = path.join(dataDir, 'db.json');
+const defaultDataDir = path.join(__dirname, '..', 'data');
 const DEFAULT_SERVER_ID = 'hermes-hub';
 const DEFAULT_CHANNEL_ID = 'general';
+
+function getDataFilePath() {
+  return process.env.CLONECORD_DATA_FILE || path.join(defaultDataDir, 'db.json');
+}
+
+function getDataDirPath() {
+  return path.dirname(getDataFilePath());
+}
 
 function slugify(value, fallbackPrefix) {
   const normalized = String(value || '')
@@ -49,6 +56,9 @@ function createDefaultData() {
 }
 
 function ensureDataFile() {
+  const dataDir = getDataDirPath();
+  const dataFile = getDataFilePath();
+
   if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir, { recursive: true });
   }
@@ -155,6 +165,8 @@ function ensureDataFile() {
 }
 
 function readData() {
+  const dataFile = getDataFilePath();
+
   try {
     return JSON.parse(fs.readFileSync(dataFile, 'utf8'));
   } catch (error) {
@@ -163,6 +175,13 @@ function readData() {
 }
 
 function writeData(data) {
+  const dataFile = getDataFilePath();
+  const dataDir = getDataDirPath();
+
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
+
   fs.writeFileSync(dataFile, JSON.stringify(data, null, 2));
 }
 

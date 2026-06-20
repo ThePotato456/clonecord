@@ -28,13 +28,15 @@ Purpose: persistent, low-friction execution tracker for the Clonecord refactor s
 ## Phase 1 — Lock down authorization and add tests
 
 ### 1. Backend test harness
-- [-] Extract reusable app factory from `src/backend/server.js`
-- [ ] Add backend test dependencies and scripts in `package.json`
-- [ ] Create isolated backend test setup and seeded datastore helpers
-- [ ] Add first backend smoke test
+- [x] Extract reusable app factory from `src/backend/server.js`
+- [x] Add backend test dependencies and scripts in `package.json`
+- [x] Create isolated backend test setup and seeded datastore helpers
+- [x] Add first backend smoke test
 - Notes:
   - This is the first execution milestone because later auth fixes need regression tests.
-  - Session started Phase 1.1 implementation on 2026-06-20.
+  - Completed on 2026-06-20.
+  - Added `src/backend/app.js`, backend `node:test` scripts, `src/backend/tests/health.test.js`, `src/backend/tests/store.test.js`, and `src/backend/tests/helpers/seedTestDb.js`.
+  - `src/backend/lib/store.js` now supports `CLONECORD_DATA_FILE` for isolated test state.
 
 ### 2. Centralize access-control helpers
 - [ ] Create `src/backend/lib/access.js`
@@ -164,6 +166,6 @@ Purpose: persistent, low-friction execution tracker for the Clonecord refactor s
 ---
 
 # Current session snapshot
-- Current state: planning complete, execution not yet started
-- Highest-priority next action: begin Phase 1, item 1 (backend test harness)
+- Current state: Phase 1.1 complete; backend test harness is in place
+- Highest-priority next action: begin Phase 1.2 (centralize access-control helpers)
 - Last updated: 2026-06-20
